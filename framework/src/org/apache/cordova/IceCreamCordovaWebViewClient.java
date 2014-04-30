@@ -31,6 +31,16 @@ import android.os.Build;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
 
+import java.io.StringReader;
+import java.lang.StringBuilder;
+import java.io.BufferedReader;
+import java.io.BufferedInputStream;
+import java.io.InputStreamReader;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.URL;
+import java.net.HttpURLConnection;
+
 @TargetApi(Build.VERSION_CODES.HONEYCOMB)
 public class IceCreamCordovaWebViewClient extends CordovaWebViewClient {
 
@@ -53,7 +63,9 @@ public class IceCreamCordovaWebViewClient extends CordovaWebViewClient {
                 // Results in a 404.
                 return new WebResourceResponse("text/plain", "UTF-8", null);
             }
-
+            
+            LOG.w(TAG, "THE URL IS HERE AHHHHHHHH : " + url);
+            
             CordovaResourceApi resourceApi = appView.getResourceApi();
             Uri origUri = Uri.parse(url);
             // Allow plugins to intercept WebView requests.
@@ -62,6 +74,17 @@ public class IceCreamCordovaWebViewClient extends CordovaWebViewClient {
             if (!origUri.equals(remappedUri) || needsSpecialsInAssetUrlFix(origUri) || needsKitKatContentUrlFix(origUri)) {
                 OpenForReadResult result = resourceApi.openForRead(remappedUri, true);
                 return new WebResourceResponse(result.mimeType, "UTF-8", result.inputStream);
+            }else if((url.startsWith("http:") || url.startsWith("https:")) && Config.isUrlWhiteListed(url)){
+                // hijack the ajax request and make the http call natively instead
+                URL ajaxUrl = new URL(url);                
+                HttpURLConnection ajaxConnection = (HttpURLConnection) ajaxUrl.openConnection();
+                try{
+                    InputStream inputStream = ajaxConnection.getInputStream();
+                    return new WebResourceResponse("text/plain", "UTF-8", inputStream);
+                }finally{
+                    ajaxConnection.disconnect();
+                    return null;
+                }
             }
             // If we don't need to special-case the request, let the browser load it.
             return null;
@@ -73,7 +96,7 @@ public class IceCreamCordovaWebViewClient extends CordovaWebViewClient {
             return new WebResourceResponse("text/plain", "UTF-8", null);
         }
     }
-
+        
     private static boolean needsKitKatContentUrlFix(Uri uri) {
         return android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT && "content".equals(uri.getScheme());
     }
